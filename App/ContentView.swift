@@ -14,6 +14,23 @@ struct BroadcastPicker: UIViewRepresentable {
     func updateUIView(_ uiView: RPSystemBroadcastPickerView, context: Context) {}
 }
 
+func diagnostics() -> String {
+    var lines = ["App: \(Bundle.main.bundleIdentifier ?? "?")"]
+    let fm = FileManager.default
+    if let url = Bundle.main.builtInPlugInsURL,
+       let items = try? fm.contentsOfDirectory(at: url, includingPropertiesForKeys: nil), !items.isEmpty {
+        for item in items {
+            let b = Bundle(url: item)
+            let ext = (b?.infoDictionary?["NSExtension"] as? [String: Any])?["NSExtensionPrincipalClass"] as? String ?? "-"
+            lines.append("PlugIn: \(item.lastPathComponent) id=\(b?.bundleIdentifier ?? "?") class=\(ext)")
+        }
+    } else {
+        lines.append("PlugIns: NONE (removed by signing?)")
+    }
+    lines.append("Supabase configured: \(!Config.supabaseURL.isEmpty)")
+    return lines.joined(separator: "\n")
+}
+
 struct ContentView: View {
     @State private var input = "Okay, so how you want me to play this?"
     @State private var output = ""
@@ -61,6 +78,10 @@ struct ContentView: View {
                     }
                     Text("اضغط الزر واختر Sard ثم Start Broadcast. بعدها افتح PlayStation App على البث بالعرض وبملء الشاشة.")
                         .font(.footnote)
+                }
+
+                Section("تشخيص") {
+                    Text(diagnostics()).font(.caption).environment(\.layoutDirection, .leftToRight)
                 }
 
                 Section("Google") {

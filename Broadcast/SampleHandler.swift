@@ -26,6 +26,11 @@ final class SampleHandler: RPBroadcastSampleHandler {
     private var lastDebug: CFTimeInterval = 0
     private var frames = 0
 
+    override init() {
+        super.init()
+        TVSender.debug("extension loaded: \(Bundle.main.bundleIdentifier ?? "?")")
+    }
+
     override func broadcastStarted(withSetupInfo setupInfo: [String: NSObject]?) {
         _ = Glossary.shared
         TVSender.send("✅ سرد متصل")
