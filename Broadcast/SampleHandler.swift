@@ -9,11 +9,11 @@ final class SampleHandler: RPBroadcastSampleHandler {
 
     // Where the subtitle sits on the phone screen (landscape, full-screen video).
     // Vision coordinates: origin bottom-left, values 0...1.
-    private let regionOfInterest = CGRect(x: 0.10, y: 0.0, width: 0.80, height: 0.25)
+    private let regionOfInterest = CGRect(x: 0.15, y: 0.02, width: 0.70, height: 0.22)
     private let centerMin: CGFloat = 0.30   // subtitle centre must be between 30% and 70% of width
     private let centerMax: CGFloat = 0.70   // (keeps out the phone-call widget on the right)
 
-    private let interval: CFTimeInterval = 0.4
+    private let interval: CFTimeInterval = 0.25
     private let clearAfter: CFTimeInterval = 1.2
 
     private let work = DispatchQueue(label: "sard.ocr")
@@ -76,17 +76,6 @@ final class SampleHandler: RPBroadcastSampleHandler {
         do { try handler.perform([request]) } catch { TVSender.debug("Vision error: \(error.localizedDescription)") }
 
         let roi = regionOfInterest
-        if now - lastDebug > 2 {
-            lastDebug = now
-            let all = (request.results ?? []).prefix(4).map { obs -> String in
-                let b = obs.boundingBox
-                let x = Int((roi.minX + b.midX * roi.width) * 100)
-                let y = Int((roi.minY + b.midY * roi.height) * 100)
-                return "[\(x),\(y)] " + (obs.topCandidates(1).first?.string ?? "")
-            }.joined(separator: " | ")
-            let w = CVPixelBufferGetWidth(pixel), h = CVPixelBufferGetHeight(pixel)
-            TVSender.debug("frames \(frames) \(w)x\(h) o\(orientation.rawValue) mem \(os_proc_available_memory() / 1_048_576)MB | \(all.isEmpty ? "no text" : all)")
-        }
         let lines = (request.results ?? []).compactMap { obs -> (CGFloat, String)? in
             guard let cand = obs.topCandidates(1).first, cand.confidence > 0.4 else { return nil }
             let box = obs.boundingBox                       // relative to the region of interest
