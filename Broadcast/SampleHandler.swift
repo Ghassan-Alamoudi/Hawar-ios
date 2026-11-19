@@ -2,6 +2,7 @@ import ReplayKit
 import Vision
 import CoreMedia
 import QuartzCore
+import os
 
 /// Runs while screen broadcasting: reads the English subtitle, translates it, sends Arabic to the TV.
 final class SampleHandler: RPBroadcastSampleHandler {
@@ -22,10 +23,13 @@ final class SampleHandler: RPBroadcastSampleHandler {
     private var lastSeen: CFTimeInterval = 0
     private var cleared = true
     private var currentID = 0
+    private var lastDebug: CFTimeInterval = 0
+    private var frames = 0
 
     override func broadcastStarted(withSetupInfo setupInfo: [String: NSObject]?) {
         _ = Glossary.shared
         TVSender.send("✅ سرد متصل")
+        TVSender.debug("broadcast started, mem free MB: \(os_proc_available_memory() / 1_048_576)")
         DispatchQueue.global().asyncAfter(deadline: .now() + 2) { TVSender.send("") }
     }
 
@@ -36,6 +40,7 @@ final class SampleHandler: RPBroadcastSampleHandler {
 
     override func processSampleBuffer(_ sampleBuffer: CMSampleBuffer, with type: RPSampleBufferType) {
         guard type == .video else { return }
+        frames += 1
         let now = CACurrentMediaTime()
         guard now - lastFrame >= interval else { return }
         guard gate.wait(timeout: .now()) == .success else { return }
@@ -63,9 +68,20 @@ final class SampleHandler: RPBroadcastSampleHandler {
         request.regionOfInterest = regionOfInterest
 
         let handler = VNImageRequestHandler(cvPixelBuffer: pixel, orientation: orientation, options: [:])
-        try? handler.perform([request])
+        do { try handler.perform([request]) } catch { TVSender.debug("Vision error: \(error.localizedDescription)") }
 
         let roi = regionOfInterest
+        if now - lastDebug > 2 {
+            lastDebug = now
+            let all = (request.results ?? []).prefix(4).map { obs -> String in
+                let b = obs.boundingBox
+                let x = Int((roi.minX + b.midX * roi.width) * 100)
+                let y = Int((roi.minY + b.midY * roi.height) * 100)
+                return "[\(x),\(y)] " + (obs.topCandidates(1).first?.string ?? "")
+            }.joined(separator: " | ")
+            let w = CVPixelBufferGetWidth(pixel), h = CVPixelBufferGetHeight(pixel)
+            TVSender.debug("frames \(frames) \(w)x\(h) o\(orientation.rawValue) mem \(os_proc_available_memory() / 1_048_576)MB | \(all.isEmpty ? "no text" : all)")
+        }
         let lines = (request.results ?? []).compactMap { obs -> (CGFloat, String)? in
             guard let cand = obs.topCandidates(1).first, cand.confidence > 0.4 else { return nil }
             let box = obs.boundingBox                       // relative to the region of interest
@@ -97,7 +113,9 @@ final class SampleHandler: RPBroadcastSampleHandler {
         currentID += 1
         let id = currentID
         Task {
-            let ar = await Translator.shared.translate(text) ?? text
+            let tr = await Translator.shared.translate(text)
+            if tr == nil { TVSender.debug("translate failed: \(text)") }
+            let ar = tr ?? text
             self.work.async {
                 if id == self.currentID { TVSender.send(ar, en: text) }
             }

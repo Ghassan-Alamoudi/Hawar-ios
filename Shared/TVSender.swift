@@ -2,7 +2,11 @@ import Foundation
 
 /// Sends a subtitle line to the Samsung TV app through Supabase Realtime (REST broadcast).
 enum TVSender {
-    static func send(_ text: String, en: String = "") {
+    static func debug(_ text: String) { post(event: "dbg", payload: ["text": text]) }
+
+    static func send(_ text: String, en: String = "") { post(event: "sub", payload: ["text": text, "en": en]) }
+
+    private static func post(event: String, payload: [String: String]) {
         guard !Config.supabaseURL.isEmpty,
               let url = URL(string: Config.supabaseURL + "/realtime/v1/api/broadcast") else { return }
         var req = URLRequest(url: url)
@@ -13,8 +17,8 @@ enum TVSender {
         let body: [String: Any] = [
             "messages": [[
                 "topic": Config.channel,
-                "event": "sub",
-                "payload": ["text": text, "en": en],
+                "event": event,
+                "payload": payload,
                 "private": false
             ]]
         ]
