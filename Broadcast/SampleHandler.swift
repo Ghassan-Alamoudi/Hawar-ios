@@ -3,6 +3,7 @@ import Vision
 import CoreMedia
 import QuartzCore
 import os
+import CoreImage
 
 /// Runs while screen broadcasting: reads the English subtitle, translates it, sends Arabic to the TV.
 final class SampleHandler: RPBroadcastSampleHandler {
@@ -10,12 +11,14 @@ final class SampleHandler: RPBroadcastSampleHandler {
     // Where the subtitle sits on the phone screen (landscape, full-screen video).
     // Vision coordinates: origin bottom-left, values 0...1.
     private let regionOfInterest = CGRect(x: 0.04, y: 0.0, width: 0.92, height: 0.30)
-    // Game subtitles are centred, sit near the bottom, and have a fixed text size.
-    private let centerTolerance: CGFloat = 0.06       // line centre must be within 50% ± 6% of width
-    private let minLineHeight: CGFloat = 0.015        // text height, as a share of screen height
-    private let maxLineHeight: CGFloat = 0.06
-    private let minY: CGFloat = 0.03                  // from the bottom of the screen
-    private let maxY: CGFloat = 0.28
+    // Game subtitles: centred, white text, fixed size, about 10% above the bottom of the video.
+    // Positions below are relative to the 16:9 game video (black bars are ignored).
+    private let centerTolerance: CGFloat = 0.06       // line centre within 50% ± 6% of width
+    private let minLineHeight: CGFloat = 0.018        // text height / video height
+    private let maxLineHeight: CGFloat = 0.05
+    private let minVideoY: CGFloat = 0.05             // line centre, from the bottom of the video
+    private let maxVideoY: CGFloat = 0.20
+    private let ciContext = CIContext(options: [.cacheIntermediates: false])
 
     private let interval: CFTimeInterval = 0.25
     private let clearAfter: CFTimeInterval = 1.2
@@ -85,19 +88,27 @@ final class SampleHandler: RPBroadcastSampleHandler {
 
         let ocrMs = Int((CACurrentMediaTime() - t0) * 1000)
         let roi = regionOfInterest
+        let image = CIImage(cvPixelBuffer: pixel).oriented(orientation)
+        let W = image.extent.width, H = image.extent.height
+        let videoH = min(H, W * 9 / 16)                     // 16:9 video inside the screen
+        let videoBottom = (H - videoH) / 2 / H              // black bar height (normalised)
+        let videoScale = videoH / H
+
         let lines = (request.results ?? []).compactMap { obs -> (CGFloat, String)? in
             guard let cand = obs.topCandidates(1).first, cand.confidence > 0.4 else { return nil }
-            let box = obs.boundingBox                       // relative to the region of interest
-            let midX = roi.minX + box.midX * roi.width
-            let midY = roi.minY + box.midY * roi.height
-            let height = box.height * roi.height
-            guard abs(midX - 0.5) <= centerTolerance,               // centred like a subtitle
-                  height >= minLineHeight, height <= maxLineHeight, // subtitle-sized text
-                  midY >= minY, midY <= maxY else { return nil }    // near the bottom
+            let b = obs.boundingBox                         // relative to the region of interest
+            let full = CGRect(x: roi.minX + b.minX * roi.width, y: roi.minY + b.minY * roi.height,
+                              width: b.width * roi.width, height: b.height * roi.height)
+            let videoY = (full.midY - videoBottom) / videoScale
+            let lineH = full.height / videoScale
+            guard abs(full.midX - 0.5) <= centerTolerance,            // centred
+                  lineH >= minLineHeight, lineH <= maxLineHeight,     // subtitle-sized
+                  videoY >= minVideoY, videoY <= maxVideoY else { return nil }  // subtitle row
             let str = cand.string
             let letters = str.unicodeScalars.filter { CharacterSet.letters.contains($0) }.count
-            guard letters >= 2, Double(letters) / Double(max(str.count, 1)) > 0.5 else { return nil } // mostly words
-            return (midY, str)
+            guard letters >= 2, Double(letters) / Double(max(str.count, 1)) > 0.6 else { return nil }
+            guard isWhiteText(image, full) else { return nil }          // white letters, not a sign/plate
+            return (full.midY, str)
         }
         .sorted { $0.0 > $1.0 }                              // top line first
         .map { $0.1 }
@@ -134,6 +145,34 @@ final class SampleHandler: RPBroadcastSampleHandler {
                 }
             }
         }
+    }
+
+    /// Subtitles are white letters on a darker picture. Signs, plates and phone screens are usually
+    /// dark letters on a light background, so they have far more bright pixels (or none at all).
+    private func isWhiteText(_ image: CIImage, _ box: CGRect) -> Bool {
+        let e = image.extent
+        let r = CGRect(x: e.minX + box.minX * e.width, y: e.minY + box.minY * e.height,
+                       width: box.width * e.width, height: box.height * e.height)
+        guard r.width > 4, r.height > 4 else { return false }
+        let tw = 96, th = 16
+        let small = image.cropped(to: r)
+            .transformed(by: CGAffineTransform(translationX: -r.minX, y: -r.minY))
+            .transformed(by: CGAffineTransform(scaleX: CGFloat(tw) / r.width, y: CGFloat(th) / r.height))
+        var px = [UInt8](repeating: 0, count: tw * th * 4)
+        ciContext.render(small, toBitmap: &px, rowBytes: tw * 4,
+                         bounds: CGRect(x: 0, y: 0, width: tw, height: th),
+                         format: .RGBA8, colorSpace: CGColorSpaceCreateDeviceRGB())
+        var bright = 0, darkSum = 0, darkCount = 0
+        for i in stride(from: 0, to: px.count, by: 4) {
+            let rr = Int(px[i]), gg = Int(px[i + 1]), bb = Int(px[i + 2])
+            let lum = (rr * 299 + gg * 587 + bb * 114) / 1000
+            let sat = max(rr, gg, bb) - min(rr, gg, bb)
+            if lum > 195 && sat < 45 { bright += 1 } else { darkSum += lum; darkCount += 1 }
+        }
+        let total = tw * th
+        let ratio = Double(bright) / Double(total)
+        let bgLum = darkCount > 0 ? darkSum / darkCount : 255
+        return ratio >= 0.03 && ratio <= 0.50 && bgLum < 170
     }
 
     /// 0...1 similarity using Levenshtein distance (OCR can flicker by a letter or two).
