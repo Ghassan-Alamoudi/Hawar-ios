@@ -23,7 +23,7 @@ final class SampleHandler: RPBroadcastSampleHandler {
     private let interval: CFTimeInterval = 0.25
     private let clearAfter: CFTimeInterval = 1.2
 
-    private let work = DispatchQueue(label: "sard.ocr")
+    private let work = DispatchQueue(label: "hawar.ocr")
     private let gate = DispatchSemaphore(value: 1)
     private var lastFrame: CFTimeInterval = 0
     private var lastText = ""
@@ -42,7 +42,7 @@ final class SampleHandler: RPBroadcastSampleHandler {
         _ = Glossary.shared
         RealtimeSocket.shared.connect()
         Task { _ = await Translator.shared.translate("Warm up the translator please") }   // load Apple model early
-        TVSender.send("✅ سرد متصل")
+        TVSender.send("✅ حوار متصل (نسخة \(Config.build))")
         TVSender.debug("broadcast started, mem free MB: \(os_proc_available_memory() / 1_048_576)")
         DispatchQueue.global().asyncAfter(deadline: .now() + 2) { TVSender.send("") }
     }
@@ -94,6 +94,7 @@ final class SampleHandler: RPBroadcastSampleHandler {
         let videoBottom = (H - videoH) / 2 / H              // black bar height (normalised)
         let videoScale = videoH / H
 
+        var diag: [String] = []
         let lines = (request.results ?? []).compactMap { obs -> (CGFloat, String)? in
             guard let cand = obs.topCandidates(1).first, cand.confidence > 0.4 else { return nil }
             let b = obs.boundingBox                         // relative to the region of interest
@@ -101,17 +102,27 @@ final class SampleHandler: RPBroadcastSampleHandler {
                               width: b.width * roi.width, height: b.height * roi.height)
             let videoY = (full.midY - videoBottom) / videoScale
             let lineH = full.height / videoScale
-            guard abs(full.midX - 0.5) <= centerTolerance,            // centred
-                  lineH >= minLineHeight, lineH <= maxLineHeight,     // subtitle-sized
-                  videoY >= minVideoY, videoY <= maxVideoY else { return nil }  // subtitle row
             let str = cand.string
             let letters = str.unicodeScalars.filter { CharacterSet.letters.contains($0) }.count
-            guard letters >= 2, Double(letters) / Double(max(str.count, 1)) > 0.6 else { return nil }
-            guard isWhiteText(image, full) else { return nil }          // white letters, not a sign/plate
-            return (full.midY, str)
+            let m = whiteMetrics(image, full)
+            var why = ""
+            if abs(full.midX - 0.5) > centerTolerance { why = "notCentered" }
+            else if lineH < minLineHeight || lineH > maxLineHeight { why = "size" }
+            else if videoY < minVideoY || videoY > maxVideoY { why = "row" }
+            else if letters < 2 || Double(letters) / Double(max(str.count, 1)) <= 0.6 { why = "notWords" }
+            else if !(m.ratio >= 0.03 && m.ratio <= 0.50 && m.bg < 170) { why = "notWhite" }
+            diag.append(String(format: "%@ [x%.2f y%.2f h%.3f w%.2f bg%d] %@",
+                               why.isEmpty ? "OK" : why, full.midX, videoY, lineH, m.ratio, m.bg,
+                               String(str.prefix(28))))
+            return why.isEmpty ? (full.midY, str) : nil
         }
         .sorted { $0.0 > $1.0 }                              // top line first
         .map { $0.1 }
+
+        if !diag.isEmpty, now - lastDebug > 1.0 {
+            lastDebug = now
+            TVSender.debug(diag.prefix(5).joined(separator: "\n"))
+        }
 
         let text = lines.joined(separator: " ").trimmingCharacters(in: .whitespacesAndNewlines)
         let letters = text.unicodeScalars.filter { CharacterSet.letters.contains($0) }.count
@@ -149,11 +160,11 @@ final class SampleHandler: RPBroadcastSampleHandler {
 
     /// Subtitles are white letters on a darker picture. Signs, plates and phone screens are usually
     /// dark letters on a light background, so they have far more bright pixels (or none at all).
-    private func isWhiteText(_ image: CIImage, _ box: CGRect) -> Bool {
+    private func whiteMetrics(_ image: CIImage, _ box: CGRect) -> (ratio: Double, bg: Int) {
         let e = image.extent
         let r = CGRect(x: e.minX + box.minX * e.width, y: e.minY + box.minY * e.height,
                        width: box.width * e.width, height: box.height * e.height)
-        guard r.width > 4, r.height > 4 else { return false }
+        guard r.width > 4, r.height > 4 else { return (0, 255) }
         let tw = 96, th = 16
         let small = image.cropped(to: r)
             .transformed(by: CGAffineTransform(translationX: -r.minX, y: -r.minY))
@@ -172,7 +183,7 @@ final class SampleHandler: RPBroadcastSampleHandler {
         let total = tw * th
         let ratio = Double(bright) / Double(total)
         let bgLum = darkCount > 0 ? darkSum / darkCount : 255
-        return ratio >= 0.03 && ratio <= 0.50 && bgLum < 170
+        return (ratio, bgLum)
     }
 
     /// 0...1 similarity using Levenshtein distance (OCR can flicker by a letter or two).

@@ -31,7 +31,8 @@ jobs:
               static let supabaseURL = "${SUPABASE_URL}"
               static let supabaseKey = "${SUPABASE_KEY}"
               static let googleKey = "${GOOGLE_KEY}"
-              static let channel = "sard"
+              static let channel = "hawar"
+              static let build = "${{ github.run_number }}"
           }
           SWIFT
 
@@ -40,17 +41,17 @@ jobs:
 
       - name: Build (unsigned)
         run: |
-          xcodebuild -project Sard.xcodeproj -scheme Sard -configuration Release \
+          xcodebuild -project Hawar.xcodeproj -scheme Hawar -configuration Release \
             -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath build \
             CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" build
 
       - name: Package IPA
         run: |
           mkdir -p Payload
-          cp -R build/Build/Products/Release-iphoneos/Sard.app Payload/
-          zip -qry Sard.ipa Payload
+          cp -R build/Build/Products/Release-iphoneos/Hawar.app Payload/
+          zip -qry Hawar.ipa Payload
 
       - uses: actions/upload-artifact@v4
         with:
-          name: Sard-ipa
-          path: Sard.ipa
+          name: Hawar-ipa
+          path: Hawar.ipa

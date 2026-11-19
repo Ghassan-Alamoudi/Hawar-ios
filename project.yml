@@ -1,4 +1,4 @@
-name: Sard
+name: Hawar
 options:
   bundleIdPrefix: com.ghassan
   deploymentTarget:
@@ -13,7 +13,7 @@ settings:
     MARKETING_VERSION: "1.0"
     CURRENT_PROJECT_VERSION: "1"
 targets:
-  Sard:
+  Hawar:
     type: application
     platform: iOS
     sources: [App, Shared]
@@ -21,30 +21,30 @@ targets:
     info:
       path: App/Info.plist
       properties:
-        CFBundleDisplayName: Sard
+        CFBundleDisplayName: Hawar
         UILaunchScreen: {}
         ITSAppUsesNonExemptEncryption: false
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.ghassan.sard
+        PRODUCT_BUNDLE_IDENTIFIER: com.ghassan.hawar
         TARGETED_DEVICE_FAMILY: "1"
     dependencies:
-      - target: SardBroadcast
+      - target: HawarBroadcast
         embed: true
-  SardBroadcast:
+  HawarBroadcast:
     type: app-extension
     platform: iOS
     sources: [Broadcast, Shared]
     info:
       path: Broadcast/Info.plist
       properties:
-        CFBundleDisplayName: Sard
+        CFBundleDisplayName: Hawar
         NSExtension:
           NSExtensionPointIdentifier: com.apple.broadcast-services-upload
           NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).SampleHandler
           RPBroadcastProcessMode: RPBroadcastProcessModeSampleBuffer
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.ghassan.sard.broadcast
+        PRODUCT_BUNDLE_IDENTIFIER: com.ghassan.hawar.broadcast
         TARGETED_DEVICE_FAMILY: "1"

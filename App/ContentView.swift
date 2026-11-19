@@ -28,6 +28,7 @@ func diagnostics() -> String {
         lines.append("PlugIns: NONE (removed by signing?)")
     }
     lines.append("Supabase configured: \(!Config.supabaseURL.isEmpty)")
+    lines.append("Build: \(Config.build)")
     return lines.joined(separator: "\n")
 }
 
@@ -76,7 +77,7 @@ struct ContentView: View {
                         BroadcastPicker().frame(width: 80, height: 80)
                         Spacer()
                     }
-                    Text("اضغط الزر واختر Sard ثم Start Broadcast. بعدها افتح PlayStation App على البث بالعرض وبملء الشاشة.")
+                    Text("اضغط الزر واختر Hawar ثم Start Broadcast. بعدها افتح PlayStation App على البث بالعرض وبملء الشاشة.")
                         .font(.footnote)
                 }
 
@@ -91,7 +92,7 @@ struct ContentView: View {
                         .font(.footnote)
                 }
             }
-            .navigationTitle("سرد")
+            .navigationTitle("حوار")
         }
         .translationTask(trConfig) { session in
             do {

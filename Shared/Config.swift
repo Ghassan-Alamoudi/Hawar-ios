@@ -3,5 +3,6 @@ enum Config {
     static let supabaseURL = ""
     static let supabaseKey = ""
     static let googleKey = ""
-    static let channel = "sard"
+    static let channel = "hawar"
+    static let build = "dev"
 }

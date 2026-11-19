@@ -14,7 +14,7 @@ actor Translator {
 
     init() {
         let dir = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
-        cacheURL = dir.appendingPathComponent("sard_cache.json")
+        cacheURL = dir.appendingPathComponent("hawar_cache.json")
         if let d = try? Data(contentsOf: cacheURL),
            let c = try? JSONDecoder().decode([String: String].self, from: d) {
             cache = c
@@ -95,7 +95,7 @@ enum GoogleQuota {
     static let limit = 480_000
     private static var url: URL {
         FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("sard_quota.json")
+            .appendingPathComponent("hawar_quota.json")
     }
     private static func month() -> String {
         let f = DateFormatter(); f.dateFormat = "yyyy-MM"; return f.string(from: Date())

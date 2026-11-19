@@ -5,7 +5,7 @@ import Foundation
 final class RealtimeSocket {
     static let shared = RealtimeSocket()
 
-    private let q = DispatchQueue(label: "sard.ws")
+    private let q = DispatchQueue(label: "hawar.ws")
     private var task: URLSessionWebSocketTask?
     private var joined = false
     private var ref = 0
