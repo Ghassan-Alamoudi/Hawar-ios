@@ -10,8 +10,12 @@ final class SampleHandler: RPBroadcastSampleHandler {
     // Where the subtitle sits on the phone screen (landscape, full-screen video).
     // Vision coordinates: origin bottom-left, values 0...1.
     private let regionOfInterest = CGRect(x: 0.04, y: 0.0, width: 0.92, height: 0.30)
-    private let centerMin: CGFloat = 0.30   // subtitle centre must be between 30% and 70% of width
-    private let centerMax: CGFloat = 0.70   // (keeps out the phone-call widget on the right)
+    // Game subtitles are centred, sit near the bottom, and have a fixed text size.
+    private let centerTolerance: CGFloat = 0.06       // line centre must be within 50% ± 6% of width
+    private let minLineHeight: CGFloat = 0.015        // text height, as a share of screen height
+    private let maxLineHeight: CGFloat = 0.06
+    private let minY: CGFloat = 0.03                  // from the bottom of the screen
+    private let maxY: CGFloat = 0.28
 
     private let interval: CFTimeInterval = 0.25
     private let clearAfter: CFTimeInterval = 1.2
@@ -86,8 +90,14 @@ final class SampleHandler: RPBroadcastSampleHandler {
             let box = obs.boundingBox                       // relative to the region of interest
             let midX = roi.minX + box.midX * roi.width
             let midY = roi.minY + box.midY * roi.height
-            guard midX >= centerMin, midX <= centerMax else { return nil }
-            return (midY, cand.string)
+            let height = box.height * roi.height
+            guard abs(midX - 0.5) <= centerTolerance,               // centred like a subtitle
+                  height >= minLineHeight, height <= maxLineHeight, // subtitle-sized text
+                  midY >= minY, midY <= maxY else { return nil }    // near the bottom
+            let str = cand.string
+            let letters = str.unicodeScalars.filter { CharacterSet.letters.contains($0) }.count
+            guard letters >= 2, Double(letters) / Double(max(str.count, 1)) > 0.5 else { return nil } // mostly words
+            return (midY, str)
         }
         .sorted { $0.0 > $1.0 }                              // top line first
         .map { $0.1 }
