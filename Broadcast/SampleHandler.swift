@@ -9,7 +9,7 @@ final class SampleHandler: RPBroadcastSampleHandler {
 
     // Where the subtitle sits on the phone screen (landscape, full-screen video).
     // Vision coordinates: origin bottom-left, values 0...1.
-    private let regionOfInterest = CGRect(x: 0.15, y: 0.02, width: 0.70, height: 0.22)
+    private let regionOfInterest = CGRect(x: 0.04, y: 0.0, width: 0.92, height: 0.30)
     private let centerMin: CGFloat = 0.30   // subtitle centre must be between 30% and 70% of width
     private let centerMax: CGFloat = 0.70   // (keeps out the phone-call widget on the right)
 
@@ -33,6 +33,8 @@ final class SampleHandler: RPBroadcastSampleHandler {
 
     override func broadcastStarted(withSetupInfo setupInfo: [String: NSObject]?) {
         _ = Glossary.shared
+        RealtimeSocket.shared.connect()
+        Task { _ = await Translator.shared.translate("Warm up the translator please") }   // load Apple model early
         TVSender.send("✅ سرد متصل")
         TVSender.debug("broadcast started, mem free MB: \(os_proc_available_memory() / 1_048_576)")
         DispatchQueue.global().asyncAfter(deadline: .now() + 2) { TVSender.send("") }
@@ -41,6 +43,7 @@ final class SampleHandler: RPBroadcastSampleHandler {
     override func broadcastFinished() {
         TVSender.send("")
         Task { await Translator.shared.save() }
+        RealtimeSocket.shared.disconnect()
     }
 
     override func processSampleBuffer(_ sampleBuffer: CMSampleBuffer, with type: RPSampleBufferType) {
@@ -72,9 +75,11 @@ final class SampleHandler: RPBroadcastSampleHandler {
         request.recognitionLanguages = ["en-US"]
         request.regionOfInterest = regionOfInterest
 
+        let t0 = CACurrentMediaTime()
         let handler = VNImageRequestHandler(cvPixelBuffer: pixel, orientation: orientation, options: [:])
         do { try handler.perform([request]) } catch { TVSender.debug("Vision error: \(error.localizedDescription)") }
 
+        let ocrMs = Int((CACurrentMediaTime() - t0) * 1000)
         let roi = regionOfInterest
         let lines = (request.results ?? []).compactMap { obs -> (CGFloat, String)? in
             guard let cand = obs.topCandidates(1).first, cand.confidence > 0.4 else { return nil }
@@ -107,11 +112,16 @@ final class SampleHandler: RPBroadcastSampleHandler {
         currentID += 1
         let id = currentID
         Task {
+            let t1 = CACurrentMediaTime()
             let tr = await Translator.shared.translate(text)
+            let trMs = Int((CACurrentMediaTime() - t1) * 1000)
             if tr == nil { TVSender.debug("translate failed: \(text)") }
             let ar = tr ?? text
             self.work.async {
-                if id == self.currentID { TVSender.send(ar, en: text) }
+                if id == self.currentID {
+                    TVSender.send(ar, en: text)
+                    TVSender.debug("ocr \(ocrMs)ms, translate \(trMs)ms | \(text)")
+                }
             }
         }
     }

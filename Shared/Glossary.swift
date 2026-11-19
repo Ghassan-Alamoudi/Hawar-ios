@@ -14,6 +14,12 @@ final class Glossary {
         "kingpin", "vcpd", "carjack", "carjacking", "getaway"
     ]
 
+    /// Only these sections' multi-word phrases are replaced inside longer sentences.
+    /// Everything else is used for whole-line matches only (safer).
+    private static let inlinePhraseSections: Set<String> = [
+        "police_and_law", "money_and_crime", "weapons_and_action"
+    ]
+
     init() {
         guard let url = Bundle(for: Glossary.self).url(forResource: "gta_glossary", withExtension: "json"),
               let data = try? Data(contentsOf: url),
@@ -25,8 +31,9 @@ final class Glossary {
             for (key, ar) in dict {
                 full[Glossary.normalize(key)] = ar
                 let isName = section == "keep_arabic"
-                let multiWord = key.split(separator: " ").count >= 2
-                if isName || multiWord || Glossary.safeInline.contains(key.lowercased()) {
+                let alwaysInline = section == "spanish_slang"
+                let multiWord = key.split(separator: " ").count >= 2 && Glossary.inlinePhraseSections.contains(section)
+                if isName || alwaysInline || multiWord || Glossary.safeInline.contains(key.lowercased()) {
                     pairs.append((key, ar))
                 }
             }

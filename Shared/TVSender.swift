@@ -7,6 +7,7 @@ enum TVSender {
     static func send(_ text: String, en: String = "") { post(event: "sub", payload: ["text": text, "en": en]) }
 
     private static func post(event: String, payload: [String: String]) {
+        if RealtimeSocket.shared.broadcast(event: event, payload: payload) { return }   // fast path
         guard !Config.supabaseURL.isEmpty,
               let url = URL(string: Config.supabaseURL + "/realtime/v1/api/broadcast") else { return }
         var req = URLRequest(url: url)
