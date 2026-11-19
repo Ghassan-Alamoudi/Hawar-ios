@@ -1,0 +1,50 @@
+name: Sard
+options:
+  bundleIdPrefix: com.ghassan
+  deploymentTarget:
+    iOS: "18.0"
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    SWIFT_STRICT_CONCURRENCY: minimal
+    CODE_SIGNING_ALLOWED: "NO"
+    CODE_SIGNING_REQUIRED: "NO"
+    CODE_SIGN_IDENTITY: ""
+    MARKETING_VERSION: "1.0"
+    CURRENT_PROJECT_VERSION: "1"
+targets:
+  Sard:
+    type: application
+    platform: iOS
+    sources: [App, Shared]
+    scheme: {}
+    info:
+      path: App/Info.plist
+      properties:
+        CFBundleDisplayName: Sard
+        UILaunchScreen: {}
+        ITSAppUsesNonExemptEncryption: false
+        UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.ghassan.sard
+        TARGETED_DEVICE_FAMILY: "1"
+    dependencies:
+      - target: SardBroadcast
+        embed: true
+  SardBroadcast:
+    type: app-extension
+    platform: iOS
+    sources: [Broadcast, Shared]
+    info:
+      path: Broadcast/Info.plist
+      properties:
+        CFBundleDisplayName: Sard
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.broadcast-services-upload
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).SampleHandler
+          RPBroadcastProcessMode: RPBroadcastProcessModeSampleBuffer
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.ghassan.sard.broadcast
+        TARGETED_DEVICE_FAMILY: "1"
